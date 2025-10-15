@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Math Competition VS Online</title>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: linear-gradient(120deg, #03045e, #0077b6, #00b4d8, #90e0ef);
+      color: #fff;
+      text-align: center;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-size: 2.5em;
+      text-shadow: 0 0 15px #48cae4;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.15);
+      padding: 20px;
+      border-radius: 20px;
+      box-shadow: 0 0 25px rgba(0,0,0,0.3);
+      width: 90%;
+      max-width: 500px;
+    }
+
+    input, button {
+      width: 90%;
+      padding: 10px;
+      margin: 8px 0;
+      font-size: 16px;
+      border-radius: 8px;
+      border: none;
+    }
+
+    button {
+      background: linear-gradient(90deg, #00b4d8, #48cae4);
+      cursor: pointer;
+      font-weight: bold;
+      color: #001;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: linear-gradient(90deg, #48cae4, #90e0ef);
+    }
+
+    #question {
+      font-size: 1.7em;
+      margin-top: 20px;
+      text-shadow: 0 0 10px #caf0f8;
+    }
+
+    .scores {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 10px;
+      font-weight: bold;
+    }
+
+    #result {
+      margin-top: 10px;
+      font-size: 1.2em;
+    }
+
+    #musicBtn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 10px 20px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 10px;
+      cursor: pointer;
+      color: #fff;
+    }
+
+    @keyframes flash {
+      0% { background-color: transparent; }
+      50% { background-color: rgba(255,255,255,0.2); }
+      100% { background-color: transparent; }
+    }
+
+    .flash {
+      animation: flash 0.3s ease-in-out;
+    }
+  </style>
+</head>
+<body>
+
+  <audio id="bgMusic" loop>
+    <source src="https://cdn.pixabay.com/download/audio/2023/01/04/audio_90db4f3dcf.mp3?filename=arcade-game-loop-145471.mp3" type="audio/mpeg">
+  </audio>
+  <button id="musicBtn">🎵 Musik</button>
+
+  <h1>🎯 Math Competition VS Online</h1>
+  <div class="panel" id="menu">
+    <input type="text" id="playerName" placeholder="Masukkan nama kamu">
+    <button id="createBtn">Buat Room</button>
+    <button id="joinBtn">Gabung Room</button>
+    <div id="roomInfo"></div>
+  </div>
+
+  <div class="panel" id="game" style="display:none;">
+    <div class="scores">
+      <div id="myScore">Skor Kamu: 0</div>
+      <div id="oppScore">Skor Lawan: 0</div>
+    </div>
+    <div id="question"></div>
+    <input id="answer" placeholder="Jawabanmu..." />
+    <button id="submitBtn">Kirim Jawaban</button>
+    <div id="result"></div>
+    <div id="status"></div>
+  </div>
+
+  <script>
+    const music = document.getElementById("bgMusic");
+    const musicBtn = document.getElementById("musicBtn");
+    musicBtn.onclick = () => {
+      if (music.paused) {
+        music.play();
+        musicBtn.textContent = "🔇 Matikan Musik";
+      } else {
+        music.pause();
+        musicBtn.textContent = "🎵 Musik";
+      }
+    };
+
+    const createBtn = document.getElementById("createBtn");
+    const joinBtn = document.getElementById("joinBtn");
+    const roomInfo = document.getElementById("roomInfo");
+    const game = document.getElementById("game");
+    const questionEl = document.getElementById("question");
+    const resultEl = document.getElementById("result");
+    const statusEl = document.getElementById("status");
+    const myScoreEl = document.getElementById("myScore");
+    const oppScoreEl = document.getElementById("oppScore");
+    const answerEl = document.getElementById("answer");
+
+    let peer, conn;
+    let myScore = 0;
+    let oppScore = 0;
+    let currentQ = {};
+    let isHost = false;
+    let name = "";
+
+    function randomQuestion() {
+      const ops = ["+", "-", "×", "÷"];
+      const op = ops[Math.floor(Math.random() * ops.length)];
+      const a = Math.floor(Math.random() * 100) + 1;
+      const b = Math.floor(Math.random() * 50) + 1;
+      let ans;
+      if (op === "+") ans = a + b;
+      else if (op === "-") ans = a - b;
+      else if (op === "×") ans = a * b;
+      else ans = (a / b).toFixed(2);
+      return { q: `${a} ${op} ${b}`, ans: ans.toString() };
+    }
+
+    function sendData(data) {
+      if (conn && conn.open) conn.send(data);
+    }
+
+    function updateQuestion() {
+      currentQ = randomQuestion();
+      questionEl.textContent = "Soal: " + currentQ.q;
+      resultEl.textContent = "";
+      answerEl.value = "";
+    }
+
+    function handleAnswer() {
+      const val = answerEl.value.trim();
+      if (!val) return;
+      questionEl.classList.add("flash");
+      setTimeout(()=>questionEl.classList.remove("flash"),200);
+
+      if (val === currentQ.ans) {
+        myScore += 10;
+        resultEl.textContent = "✅ Benar!";
+      } else {
+        myScore -= 5;
+        resultEl.textContent = `❌ Salah! Jawaban: ${currentQ.ans}`;
+      }
+      myScoreEl.textContent = `Skor Kamu: ${myScore}`;
+      sendData({ type: "score", score: myScore });
+      updateQuestion();
+      sendData({ type: "question", q: currentQ });
+    }
+
+    document.getElementById("submitBtn").addEventListener("click", handleAnswer);
+
+    createBtn.onclick = () => {
+      name = document.getElementById("playerName").value.trim();
+      if (!name) return alert("Masukkan nama dulu!");
+      isHost = true;
+      peer = new Peer();
+      peer.on("open", (id) => {
+        roomInfo.innerHTML = `
+          <p><b>ID Room:</b> <span style="color:#90e0ef">${id}</span></p>
+          <p>Bagikan ID ini ke temanmu untuk bergabung!</p>`;
+      });
+      peer.on("connection", (connection) => {
+        conn = connection;
+        setupConnection();
+        roomInfo.innerHTML = `<p>Lawan terhubung! Game dimulai 🔥</p>`;
+        document.getElementById("menu").style.display = "none";
+        game.style.display = "block";
+        updateQuestion();
+        sendData({ type: "question", q: currentQ });
+      });
+    };
+
+    joinBtn.onclick = () => {
+      name = document.getElementById("playerName").value.trim();
+      if (!name) return alert("Masukkan nama dulu!");
+      const roomId = prompt("Masukkan ID Room dari temanmu:");
+      peer = new Peer();
+      peer.on("open", () => {
+        conn = peer.connect(roomId);
+        setupConnection();
+        roomInfo.innerHTML = `<p>Menghubungkan ke host...</p>`;
+      });
+    };
+
+    function setupConnection() {
+      conn.on("open", () => {
+        statusEl.textContent = "✅ Terhubung ke lawan!";
+        document.getElementById("menu").style.display = "none";
+        game.style.display = "block";
+      });
+
+      conn.on("data", (data) => {
+        if (data.type === "question" && !isHost) {
+          currentQ = data.q;
+          questionEl.textContent = "Soal: " + currentQ.q;
+        }
+        if (data.type === "score") {
+          oppScore = data.score;
+          oppScoreEl.textContent = `Skor Lawan: ${oppScore}`;
+        }
+      });
+    }
+  </script>
+</body>
+</html>
+
+</body>
+</html>
